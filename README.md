@@ -1,6 +1,6 @@
 # CustomVideoPlayers
 
-A [NeosModLoader](https://github.com/zkxs/NeosModLoader) mod for [Neos VR](https://neos.com/) that allows you to select a custom video player from your inventory and have it spawn whenever a video player is generated.
+A [NeosModLoader](https://github.com/zkxs/NeosModLoader) mod for [Neos VR](https://neos.com/) that allows you to select a custom video player from your inventory and have it spawn whenever a video is imported.
 
 ## Installation
 1. Install [NeosModLoader](https://github.com/zkxs/NeosModLoader).
