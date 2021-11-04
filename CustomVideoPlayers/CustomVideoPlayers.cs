@@ -17,7 +17,7 @@ namespace CustomVideoPlayers
     {
         public override string Name => "CustomVideoPlayers";
         public override string Author => "art0007i";
-        public override string Version => "1.0.0";
+        public override string Version => "1.0.1";
         public override string Link => "https://github.com/art0007i/CustomVideoPlayers/";
         public override void OnEngineInit()
         {
@@ -50,8 +50,7 @@ namespace CustomVideoPlayers
                         Engine.Current.Cloud.WriteVariable(VIDEO_PLAYER_VARIABLE, value);
                     }
 
-                    // TODO: Add exception handling to the event
-                    VideoPlayerChanged(value);
+                    AccessTools.Method(typeof(ProfileManager), "SafeInvoke").Invoke(Engine.Current.Cloud.Profile, new object[] { VideoPlayerChanged, value });
                 }
             }
         }
@@ -76,11 +75,13 @@ namespace CustomVideoPlayers
         [HarmonyPatch(typeof(InventoryBrowser))]
         class InventoryBrowser_VideoChangeEvents_Patch
         {
+            private static Dictionary<InventoryBrowser, Action<Uri>> ActiveVideoEvents = new Dictionary<InventoryBrowser, Action<Uri>>();
+
             [HarmonyPostfix]
             [HarmonyPatch("OnAwake")]
             public static void PostAwake(InventoryBrowser __instance)
             {
-                VideoPlayerChanged += (uri) =>
+                ActiveVideoEvents.Add(__instance, (uri) =>
                 {
                     if (__instance.CanInteract(__instance.LocalUser))
                     {
@@ -89,26 +90,17 @@ namespace CustomVideoPlayers
                             AccessTools.Method(typeof(InventoryBrowser), "ReprocessItems").Invoke(__instance, null);
                         });
                     }
-                };
+                });
+                VideoPlayerChanged += ActiveVideoEvents[__instance];
+
             }
             [HarmonyPostfix]
             [HarmonyPatch("OnDispose")]
             public static void PostDispose(InventoryBrowser __instance)
             {
-                // TODO: Remove event when disposing, I don't know how to remove it
-                // The commented code was my attempt at removing it, didn't work
-                /*
-                VideoPlayerChanged -= (uri) =>
-                {
-                    if (__instance.CanInteract(__instance.LocalUser))
-                    {
-                        __instance.RunSynchronously(() =>
-                        {
-                            AccessTools.Method(typeof(InventoryBrowser), "ReprocessItems").Invoke(__instance, null);
-                        });
-                    }
-                };
-                */
+                var del = ActiveVideoEvents[__instance];
+                ActiveVideoEvents.Remove(__instance);
+                VideoPlayerChanged -= del;
             }
 
             [HarmonyPostfix]
