@@ -195,12 +195,11 @@ namespace CustomVideoPlayers
         [HarmonyPatch(typeof(VideoImportDialog), "ImportAsync")]
         class VideoImportDialog_ImportAsync_Patch
         {
-            // if you are trying to compile the mod and get an error saying that the type VideoImportDialog.VideoType is not accessible,
-            // just change it to public using dnSpy, it will work even if the type becomes private again since access modifiers are only a suggestion
-            static bool Prefix(ref Task __result, Slot slot, string path, VideoImportDialog.VideoType type, StereoLayout stereo)
+            //the `int type` should be an enum but the enum is private so compiler doesn't like it, but luckily we can use an integer instead
+            static bool Prefix(ref Task __result, Slot slot, string path, int type, StereoLayout stereo)
             {
                 if (VideoPlayerUrl == null) return true;
-                if (type == VideoImportDialog.VideoType.Regular)
+                if (type == 0) //VideoImportDialog.VideoType.Regular has a value of 0
                 {
                     __result = slot.StartTask(async delegate ()
                     {
