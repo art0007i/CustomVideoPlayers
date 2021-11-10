@@ -17,7 +17,7 @@ namespace CustomVideoPlayers
     {
         public override string Name => "CustomVideoPlayers";
         public override string Author => "art0007i";
-        public override string Version => "1.0.1";
+        public override string Version => "1.0.2";
         public override string Link => "https://github.com/art0007i/CustomVideoPlayers/";
         public override void OnEngineInit()
         {
@@ -218,9 +218,7 @@ namespace CustomVideoPlayers
                         Uri uri = new Uri(path);
                         if (uri.Scheme.Contains("file"))
                         {
-                            await default(ToBackground);
                             uri = await slot.World.Engine.LocalDB.ImportLocalAssetAsync(path, LocalDB.ImportLocation.Original, null).ConfigureAwait(false);
-                            await default(ToWorld);
                         }
 
                         player.Stream.Value = uri.Scheme == "http" || uri.Scheme == "https" || uri.Scheme == "neosdb" || uri.Scheme == "rtp" || uri.Scheme == "mms" || uri.Scheme == "rtsp";
