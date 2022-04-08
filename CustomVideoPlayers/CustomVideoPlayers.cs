@@ -10,6 +10,7 @@ using FrooxEngine.LogiX;
 using FrooxEngine.UIX;
 using BaseX;
 using System.Reflection.Emit;
+using SpecialItemsLib;
 
 namespace CustomVideoPlayers
 {
@@ -17,173 +18,31 @@ namespace CustomVideoPlayers
     {
         public override string Name => "CustomVideoPlayers";
         public override string Author => "art0007i";
-        public override string Version => "1.0.2";
+        public override string Version => "2.0.0";
         public override string Link => "https://github.com/art0007i/CustomVideoPlayers/";
         public override void OnEngineInit()
         {
             Harmony harmony = new Harmony("me.art0007i.CustomVideoPlayers");
             harmony.PatchAll();
+            // Register our item in the library, this returns an object that allows retrieving the url which is managed by the library
+            OurItem = SpecialItemsLib.SpecialItemsLib.RegisterItem(VIDEO_PLAYER_TAG);
         }
 
-        // Constant defintions, including: an enum with a value that is normally impossible, a tag that gets added to all saved video players and a cloud variable that stores player urls
-        public static InventoryBrowser.SpecialItemType VIDEO_PLAYER_SPECIAL_ITEM { get { return (InventoryBrowser.SpecialItemType)6; } }
-        public static string VIDEO_PLAYER_TAG { get { return "custom_video_player"; } } 
-        public static string VIDEO_PLAYER_VARIABLE { get { return "U-art0007i.video_player.current"; } }
-
-        // Video player variable, it's a property that updates your cloud variable when you change it
-        private static Uri _VideoPlayerUrl;
-        public static Uri VideoPlayerUrl { get
-            {
-                return _VideoPlayerUrl;
-            }
-            set
-            {
-                if(_VideoPlayerUrl != value)
-                {
-                    if(Engine.Current.Cloud.CurrentUser == null && value != null)
-                    {
-                        throw new InvalidOperationException("Cannot set video player URL without being signed in");
-                    }
-                    _VideoPlayerUrl = value;
-                    if(Engine.Current.Cloud.CurrentUser != null)
-                    {
-                        Engine.Current.Cloud.WriteVariable(VIDEO_PLAYER_VARIABLE, value);
-                    }
-
-                    AccessTools.Method(typeof(ProfileManager), "SafeInvoke").Invoke(Engine.Current.Cloud.Profile, new object[] { VideoPlayerChanged, value });
-                }
-            }
-        }
-
-        public static event Action<Uri> VideoPlayerChanged;
-
-        // This loads your video player url from the cloud
-        [HarmonyPatch(typeof(ProfileManager), "SignIn")]
-        class ProfileManager_SignIn_Patch
-        {
-            public static async void Prefix(ProfileManager __instance)
-            {
-                var videoResult = await __instance.Cloud.ReadVariable<Uri>(VIDEO_PLAYER_VARIABLE);
-                if (videoResult.IsOK)
-                {
-                    VideoPlayerUrl = videoResult.Entity;
-                }
-            }
-        }
-
-        // This makes it so whenever you change the player url the pink background updates
-        [HarmonyPatch(typeof(InventoryBrowser))]
-        class InventoryBrowser_VideoChangeEvents_Patch
-        {
-            private static Dictionary<InventoryBrowser, Action<Uri>> ActiveVideoEvents = new Dictionary<InventoryBrowser, Action<Uri>>();
-
-            [HarmonyPostfix]
-            [HarmonyPatch("OnAwake")]
-            public static void PostAwake(InventoryBrowser __instance)
-            {
-                ActiveVideoEvents.Add(__instance, (uri) =>
-                {
-                    if (__instance.CanInteract(__instance.LocalUser))
-                    {
-                        __instance.RunSynchronously(() =>
-                        {
-                            AccessTools.Method(typeof(InventoryBrowser), "ReprocessItems").Invoke(__instance, null);
-                        });
-                    }
-                });
-                VideoPlayerChanged += ActiveVideoEvents[__instance];
-
-            }
-            [HarmonyPostfix]
-            [HarmonyPatch("OnDispose")]
-            public static void PostDispose(InventoryBrowser __instance)
-            {
-                var del = ActiveVideoEvents[__instance];
-                ActiveVideoEvents.Remove(__instance);
-                VideoPlayerChanged -= del;
-            }
-
-            [HarmonyPostfix]
-            [HarmonyPatch("ProcessItem")]
-            public static void PostProcess(InventoryItemUI item)
-            {
-                Record record = (Record)AccessTools.Field(item.GetType(), "Item").GetValue(item);
-                Uri uri = record?.URL;
-                InventoryBrowser.SpecialItemType specialItemType = InventoryBrowser.ClassifyItem(item);
-                if (uri != null && specialItemType == VIDEO_PLAYER_SPECIAL_ITEM && uri == VideoPlayerUrl)
-                {
-                    item.NormalColor.Value = InventoryBrowser.ACTIVE_AVATAR_COLOR;
-                    item.SelectedColor.Value = InventoryBrowser.ACTIVE_AVATAR_COLOR.MulA(2f);
-                    return;
-                }
-            }
-        }
-
-        // This allows identifying which items in the inventory are video players
-        [HarmonyPatch(typeof(InventoryBrowser), "ClassifyItem")]
-        class InventoryBrowser_ClassifyItem_Patch
-        {
-            public static void Postfix(InventoryItemUI itemui, ref InventoryBrowser.SpecialItemType __result)
-            {
-                if (itemui != null)
-                {
-                    Record record = (Record)AccessTools.Field(itemui.GetType(), "Item").GetValue(itemui);
-                    if(record != null && record.Tags != null)
-                    {
-                        if (record.Tags.Contains(VIDEO_PLAYER_TAG))
-                        {
-                            __result = VIDEO_PLAYER_SPECIAL_ITEM;
-                        }
-                    }
-                }
-            }
-        }
-
-        // This adds the purple heart button to video players
-        [HarmonyPatch(typeof(InventoryBrowser), "OnItemSelected")]
-        class InventoryBrowser_OnItemSelected_Patch
-        {
-            public static void Prefix(InventoryBrowser __instance, out InventoryBrowser.SpecialItemType __state)
-            {
-                __state = (AccessTools.Field(typeof(InventoryBrowser), "_lastSpecialItemType").GetValue(__instance) as Sync<InventoryBrowser.SpecialItemType>).Value;
-            }
-
-            public static void Postfix(InventoryBrowser __instance, BrowserItem currentItem, InventoryBrowser.SpecialItemType __state)
-            {
-                InventoryItemUI inventoryItemUI = currentItem as InventoryItemUI;
-                InventoryBrowser.SpecialItemType specialItemType = InventoryBrowser.ClassifyItem(inventoryItemUI);
-                var buttonsRoot = (AccessTools.Field(typeof(InventoryBrowser), "_buttonsRoot").GetValue(__instance) as SyncRef<Slot>).Target[0];
-                if (__state == specialItemType) return;
-                if (specialItemType == VIDEO_PLAYER_SPECIAL_ITEM)
-                {
-                    UIBuilder uibuilder = new UIBuilder(buttonsRoot);
-                    uibuilder.Style.PreferredWidth = BrowserDialog.DEFAULT_ITEM_SIZE * 0.6f;
-
-                    //MixColor method, since its a one liner i would rather just copy source than reflection to get it
-                    var pink = MathX.Lerp(color.Purple, color.White, 0.5f);
-
-                    var but = uibuilder.Button(NeosAssets.Common.Icons.Heart, pink, color.Black);
-
-                    but.Slot.OrderOffset = -1;
-                    but.LocalPressed += (IButton button, ButtonEventData data) => {
-                        Uri url = (AccessTools.Field(typeof(InventoryItemUI), "Item").GetValue(__instance.SelectedInventoryItem) as Record).URL;
-                        if (VideoPlayerUrl == url)
-                        {
-                            url = null;
-                        }
-                        VideoPlayerUrl = url;
-                    };
-                }
-            }
-        }
+        // Constant defintions, including: a tag that gets added to all saved video players, and our special item which we can use to retrieve the url
+        private static string VIDEO_PLAYER_TAG { get { return "custom_video_player"; } } 
+        private static CustomSpecialItem OurItem;
 
         // This adds the custom video player tag to saved video players
+        // It's necessary for the library to recognize it as a special item and allow favoriting it
         [HarmonyPatch(typeof(SlotHelper), "GenerateTags", new Type[] { typeof(Slot), typeof(HashSet<string>) })]
         class SlotHelper_GenerateTags_Patch
         {
             static void Postfix(Slot slot, HashSet<string> tags)
             {
-                if(slot.GetComponentInChildren<VideoTextureProvider>() != null)
+                // usually you only need to change which component you are looking for
+                // but you can change up this entire method in case you have a more complex
+                // algorithm for figuring out if an item should be favoritable
+                if (slot.GetComponentInChildren<VideoTextureProvider>() != null)
                 {
                     tags.Add(VIDEO_PLAYER_TAG);
                 }
@@ -198,7 +57,7 @@ namespace CustomVideoPlayers
             //the `int type` should be an enum but the enum is private so compiler doesn't like it, but luckily we can use an integer instead
             static bool Prefix(ref Task __result, Slot slot, string path, int type, StereoLayout stereo)
             {
-                if (VideoPlayerUrl == null) return true;
+                if (OurItem.Uri == null) return true;
                 if (type == 0) //VideoImportDialog.VideoType.Regular has a value of 0
                 {
                     __result = slot.StartTask(async delegate ()
@@ -206,7 +65,7 @@ namespace CustomVideoPlayers
                         var pos = slot.GlobalPosition; //we need to store the trs of the slot before we load an object to it
                         var rot = slot.GlobalRotation;
 
-                        await slot.LoadObjectAsync(VideoPlayerUrl);
+                        await slot.LoadObjectAsync(OurItem.Uri);
                         InventoryItem component = slot.GetComponent<InventoryItem>();
                         slot = ((component != null) ? component.Unpack(null) : null) ?? slot;
 
@@ -225,7 +84,8 @@ namespace CustomVideoPlayers
 
                         player.URL.Value = uri;
 
-                        slot.ForeachComponentInChildren((VideoPlayer video) => video.StereoLayout.Value = stereo); //this line exists cause otherwise if your spawning an edited default video player when you click play it changes the stereo layout to whatever the player was last set to
+                        slot.ForeachComponentInChildren((VideoPlayer video) => video.StereoLayout.Value = stereo);
+                        //this line exists cause otherwise if your spawning an edited default video player when you click play it changes the stereo layout to whatever the player was last set to
                         foreach (IAssetRef Ref in player.References)
                         {
                             if (Ref.Parent is IStereoMaterial)
