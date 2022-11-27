@@ -42,7 +42,7 @@ namespace CustomVideoPlayers
                 // usually you only need to change which component you are looking for
                 // but you can change up this entire method in case you have a more complex
                 // algorithm for figuring out if an item should be favoritable
-                if (slot.GetComponentInChildren<VideoTextureProvider>() != null)
+                if (slot.GetComponent<VideoTextureProvider>() != null)
                 {
                     tags.Add(VIDEO_PLAYER_TAG);
                 }
